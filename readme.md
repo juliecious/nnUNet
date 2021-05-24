@@ -1,9 +1,4 @@
-**[2020_10_21] Update:** We now have documentation for [common questions](documentation/common_questions.md) and
-[common issues](documentation/common_problems_and_solutions.md). We now also provide [reference epoch times for 
-several datasets and tips on how to identify bottlenecks](documentation/expected_epoch_times.md).
-
-Please read these documents before opening a new issue!
-
+This is a branch forked from nnU-Net. It intends to incorporate self-supervised learning into the current framework.
 
 # nnU-Net
 
@@ -40,6 +35,11 @@ structure, new architectures and methods can easily be integrated into nnU-Net. 
 generic nature to roll out and evaluate their modifications on an arbitrary number of datasets in a 
 standardized environment.  
 
+For [common questions](documentation/common_questions.md) and
+[common issues](documentation/common_problems_and_solutions.md), please read these documents before opening a new issue. We now also provide [reference epoch times for 
+several datasets and tips on how to identify bottlenecks](documentation/expected_epoch_times.md).
+
+
 For more information about nnU-Net, please read the following paper:
 
 
@@ -54,6 +54,7 @@ Please also cite this paper if you are using nnU-Net for your research!
 - [Usage](#usage)
   * [How to run nnU-Net on a new dataset](#how-to-run-nnu-net-on-a-new-dataset)
     + [Dataset conversion](#dataset-conversion)
+    + [Self-supervised learning](#self-supervised-learning)
     + [Experiment planning and preprocessing](#experiment-planning-and-preprocessing)
     + [Model training](#model-training)
       - [2D U-Net](#2d-u-net)
@@ -144,6 +145,10 @@ all the way to ensembling. After running nnU-Net, the trained model(s) can be ap
 nnU-Net expects datasets in a structured format. This format closely (but not entirely) follows the data structure of 
 the [Medical Segmentation Decthlon](http://medicaldecathlon.com/). Please read 
 [this](documentation/dataset_conversion.md) for information on how to convert datasets to be compatible with nnU-Net.
+
+### Self-supervised learning
+TODO: In order to perform self-supervised learning tasks, nnU-Net converts the dataset into a self-supervision dataset - with labels and without labels. 
+
 
 ### Experiment planning and preprocessing
 As a first step, nnU-Net extracts a dataset fingerprint (a set of dataset-specific properties such as 
