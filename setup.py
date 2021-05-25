@@ -26,6 +26,7 @@ setup(name='nnunet',
       entry_points={
           'console_scripts': [
               'nnUNet_convert_decathlon_task = nnunet.experiment_planning.nnUNet_convert_decathlon_task:main',
+              # 'nnUNet_self_supervision = nnunet.self_supervision.XXX:main',
               'nnUNet_plan_and_preprocess = nnunet.experiment_planning.nnUNet_plan_and_preprocess:main',
               'nnUNet_train = nnunet.run.run_training:main',
               'nnUNet_train_DP = nnunet.run.run_training_DP:main',
