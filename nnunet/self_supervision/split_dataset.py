@@ -82,7 +82,7 @@ def main():
 
     for file in sorted(listdir(src)):
         corrupt_img = corrupt_image(join(src,file))
-        corrupt_img_file = 'c' + str(file)
+        corrupt_img_file = 'corrupted_' + str(file)
         corrupt_img_output = join(dest, corrupt_img_file)
         sitk.WriteImage(corrupt_img, corrupt_img_output)
 
