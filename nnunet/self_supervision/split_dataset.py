@@ -2,6 +2,7 @@ import errno
 import shutil
 import numpy as np
 from batchgenerators.utilities.file_and_folder_operations import *
+from nnunet.configuration import default_num_threads
 from nnunet.dataset_conversion.utils import generate_dataset_json
 from nnunet.paths import nnUNet_raw_data, preprocessing_output_dir
 import SimpleITK as sitk
@@ -32,14 +33,28 @@ def corrupt_image(filename):
 
 
 def main():
-    # local file path for testing
-    base = '/Users/juliefang/Documents/nnUNet_raw_data_base/nnUNet_raw_data/nnUNet_raw_data'
+    import argparse
+    parser = argparse.ArgumentParser(description="We extend nnUNet to offer self-supervision tasks. This step is to"
+                                                 " split the dataset into two - self-supervision input and self- "
+                                                 "supervisio output folder.")
+    parser.add_argument("-b", help="Input base. Must point to the nnUNet_raw_data_base/nnUNet_raw_data folder generated"
+                                   " from nnUNet_convert_decathlon_task step", required=True)
+    parser.add_argument("-p", required=False, default=default_num_threads, type=int,
+                        help="Use this to specify how many processes are used to run the script. "
+                             "Default is %d" % default_num_threads)
+    parser.add_argument("-output_task_id", required=False, default=None, type=int,
+                        help="If specified, this will overwrite the task id in the output folder. If unspecified, the "
+                             "task id of the input folder will be used.")
+    args = parser.parse_args()
 
+    # # local file path for testing
+    # base = '/Users/juliefang/Documents/nnUNet_raw_data_base/nnUNet_raw_data/'
+    base = args.b
     task_name = 'Task002_Heart'
     target_base = join(base, task_name)
 
-    target_ss_input = join(target_base, "ssInput")  # ssInputContextRestoration - corrupted
-    target_ss_output = join(target_base, "ssOutput")  # ssOutputContextRestoration - original
+    target_ss_input = join(target_base, "ssInputContextRestoration")  # ssInput - corrupted
+    target_ss_output = join(target_base, "ssOutputContextRestoration")  # ssOutput - original
 
     maybe_mkdir_p(target_ss_input)
     maybe_mkdir_p(target_ss_output)
@@ -57,8 +72,6 @@ def main():
         else:
             print('Error occurs: ' + str(e))
 
-    print(listdir(dest))
-
     dest = join(target_base, 'ssInput')
 
     for file in sorted(listdir(src)):
@@ -67,8 +80,8 @@ def main():
         corrupt_img_output = join(dest, corrupt_img_file)
         sitk.WriteImage(corrupt_img, corrupt_img_output)
 
-    if listdir(target_ss_input) == listdir(target_ss_output):
-        print("Copied success: self-supervision dataset is ready.")
+    # if len(listdir(target_ss_input)) == len(listdir(target_ss_output)):
+    #     print("Copied success: self-supervision dataset is ready.")
 
 if __name__ == "__main__":
     main()
