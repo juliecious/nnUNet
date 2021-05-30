@@ -163,7 +163,7 @@ Provided that the requested raw dataset is located in the correct folder (`nnUNe
 also see [here](documentation/dataset_conversion.md)), you can run this step with the following command:
 
 ```bash
-nnUNet_self_supervision -t XXX
+nnUNet_self_supervision -t XXX -ss_tasks context_resotration jigsaw_puzzle
 ```
 
 ### Experiment planning and preprocessing
