@@ -147,8 +147,24 @@ the [Medical Segmentation Decthlon](http://medicaldecathlon.com/). Please read
 [this](documentation/dataset_conversion.md) for information on how to convert datasets to be compatible with nnU-Net.
 
 ### Self-supervised learning
-TODO: In order to perform self-supervised learning tasks, nnU-Net converts the dataset into a self-supervision dataset - with labels and without labels. 
+Currently supported self-supervision tasks:
+- Context Restoration
+- Jigsaw Puzzle (TODO)
+- Contrast Learning (TODO)
+-
 
+nnUnet uses the dataset under `nnUNet_raw_data_base/nnUNet_raw_data`, divides it into two datasets, one with labels and 
+one without.
+
+For context restoration tasks, noises are added to the corrupt the images in `imagesTr` and then saved in 
+`ssInputContextRestoration`. In `ssOutputContextRestoration` images are copied directly from `imagesTr`. 
+
+Provided that the requested raw dataset is located in the correct folder (`nnUNet_raw_data_base/nnUNet_raw_data/TaskXXX_MYTASK`, 
+also see [here](documentation/dataset_conversion.md)), you can run this step with the following command:
+
+```bash
+nnUNet_self_supervision -t XXX
+```
 
 ### Experiment planning and preprocessing
 As a first step, nnU-Net extracts a dataset fingerprint (a set of dataset-specific properties such as 

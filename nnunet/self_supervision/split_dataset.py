@@ -37,20 +37,20 @@ def main():
     parser = argparse.ArgumentParser(description="We extend nnUNet to offer self-supervision tasks. This step is to"
                                                  " split the dataset into two - self-supervision input and self- "
                                                  "supervisio output folder.")
-    parser.add_argument("-b", help="Input base. Must point to the nnUNet_raw_data_base/nnUNet_raw_data folder generated"
-                                   " from nnUNet_convert_decathlon_task step", required=True)
+    parser.add_argument("-t", "--task_ids", nargs="+", help="List of integers belonging to the task ids you wish to run"
+                                                            " experiment planning and preprocessing for. Each of these "
+                                                            "ids must, have a matching folder 'TaskXXX_' in the raw "
+                                                            "data folder")
     parser.add_argument("-p", required=False, default=default_num_threads, type=int,
                         help="Use this to specify how many processes are used to run the script. "
                              "Default is %d" % default_num_threads)
-    parser.add_argument("-output_task_id", required=False, default=None, type=int,
-                        help="If specified, this will overwrite the task id in the output folder. If unspecified, the "
-                             "task id of the input folder will be used.")
     args = parser.parse_args()
 
     # # local file path for testing
     # base = '/Users/juliefang/Documents/nnUNet_raw_data_base/nnUNet_raw_data/'
-    base = args.b
-    task_name = 'Task002_Heart'
+    base = join(os.environ['nnUNet_raw_data_base'], 'nnUNet_raw_data')
+    # task_name = 'Task002_Heart'
+    task_name = "Task%03.0d" % args.t
     target_base = join(base, task_name)
 
     target_ss_input = join(target_base, "ssInputContextRestoration")  # ssInput - corrupted
@@ -80,8 +80,8 @@ def main():
         corrupt_img_output = join(dest, corrupt_img_file)
         sitk.WriteImage(corrupt_img, corrupt_img_output)
 
-    # if len(listdir(target_ss_input)) == len(listdir(target_ss_output)):
-    #     print("Copied success: self-supervision dataset is ready.")
+    if len(listdir(target_ss_input)) == len(listdir(target_ss_output)):
+        print("Copied success: self-supervision dataset is ready.")
 
 if __name__ == "__main__":
     main()
