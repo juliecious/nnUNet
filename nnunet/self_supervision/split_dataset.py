@@ -1,14 +1,23 @@
-import errno
+#    Copyright 2021 Division of Medical and Environmental Computing, Technical University of Darmstadt, Darmstadt, Germany
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
 import shutil
-import nnunet
 import numpy as np
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.configuration import default_num_threads
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
-from nnunet.dataset_conversion.utils import generate_dataset_json
-from nnunet.paths import nnUNet_raw_data, preprocessing_output_dir
 import SimpleITK as sitk
-from multiprocessing import Pool
 
 
 def corrupt_image(filename):
@@ -24,7 +33,7 @@ def corrupt_image(filename):
 
     indices = np.random.random(img_npy.shape) < 0.2
     _img_npy = img_npy.copy()
-    _img_npy[indices] = 0 # set to black
+    _img_npy[indices] = 0  # set to black
     img_itk_new = sitk.GetImageFromArray(_img_npy)
     img_itk_new.SetSpacing(spacing)
     img_itk_new.SetOrigin(origin)
@@ -40,27 +49,21 @@ def main():
                                                  " split the dataset into two - self-supervision input and self- "
                                                  "supervisio output folder.")
     parser.add_argument("-t", type=int, help="Task id. The task name you wish to run self-supervision task for. "
-                                                            "It must have a matching folder 'TaskXXX_' in the raw "
-                                                            "data folder")
+                                             "It must have a matching folder 'TaskXXX_' in the raw "
+                                             "data folder")
     parser.add_argument("-p", required=False, default=default_num_threads, type=int,
                         help="Use this to specify how many processes are used to run the script. "
                              "Default is %d" % default_num_threads)
     args = parser.parse_args()
 
-    # # local file path for testing
-    # base = '/Users/juliefang/Documents/nnUNet_raw_data_base/nnUNet_raw_data/'
     base = join(os.environ['nnUNet_raw_data_base'], 'nnUNet_raw_data')
-    # task_name = 'Task002_Heart'
     task_id = args.t
     task_name = convert_id_to_task_name(task_id)
     target_base = join(base, task_name)
 
-    ss_input = "ssInputContextRestoration"
-    ss_output = "ssOutputContextRestoration"
-
     src = join(target_base, "imagesTr")
-    target_ss_input = join(target_base, ss_input)  # ssInput - corrupted
-    target_ss_output = join(target_base, ss_output)  # ssOutput - original
+    target_ss_input = join(target_base, "ssInputContextRestoration")  # ssInput - corrupted
+    target_ss_output = join(target_base, "ssOutputContextRestoration")  # ssOutput - original
 
     maybe_mkdir_p(target_ss_input)
     maybe_mkdir_p(target_ss_output)
@@ -76,7 +79,8 @@ def main():
         sitk.WriteImage(corrupt_img, corrupt_img_output)
 
     assert len(listdir(target_ss_input)) == len(listdir(target_ss_output)) == len(listdir(src)), \
-    "Preparation for self-supervision dataset failed. Check again."
+        "Preparation for self-supervision dataset failed. Check again."
+
 
 if __name__ == "__main__":
     main()
