@@ -39,7 +39,7 @@ def main():
     parser = argparse.ArgumentParser(description="We extend nnUNet to offer self-supervision tasks. This step is to"
                                                  " split the dataset into two - self-supervision input and self- "
                                                  "supervisio output folder.")
-    parser.add_argument("-t", type=int, help="Task id. The task name you wish to run self-supervision task for."
+    parser.add_argument("-t", type=int, help="Task id. The task name you wish to run self-supervision task for. "
                                                             "It must have a matching folder 'TaskXXX_' in the raw "
                                                             "data folder")
     parser.add_argument("-p", required=False, default=default_num_threads, type=int,
@@ -55,38 +55,27 @@ def main():
     task_name = convert_id_to_task_name(task_id)
     target_base = join(base, task_name)
 
-
     ss_input = "ssInputContextRestoration"
     ss_output = "ssOutputContextRestoration"
 
+    src = join(target_base, "imagesTr")
     target_ss_input = join(target_base, ss_input)  # ssInput - corrupted
     target_ss_output = join(target_base, ss_output)  # ssOutput - original
 
     maybe_mkdir_p(target_ss_input)
     maybe_mkdir_p(target_ss_output)
 
-    src = join(target_base, "imagesTr")
-    dest = join(target_base, ss_output)
-
-    try:
-        if os.path.exists(dest):
-            shutil.rmtree(dest)
-            shutil.copytree(src, dest)
-    except OSError as e:
-        if e.errno == errno.ENOTDIR:
-            shutil.copy(src, dest)
-        else:
-            print('Error occurs: ' + str(e))
-
-    dest = join(target_base, ss_input)
+    if isdir(target_ss_output):
+        shutil.rmtree(target_ss_output)
+    shutil.copytree(src, target_ss_output)
 
     for file in sorted(listdir(src)):
-        corrupt_img = corrupt_image(join(src,file))
+        corrupt_img = corrupt_image(join(src, file))
         corrupt_img_file = 'corrupted_' + str(file)
-        corrupt_img_output = join(dest, corrupt_img_file)
+        corrupt_img_output = join(target_ss_input, corrupt_img_file)
         sitk.WriteImage(corrupt_img, corrupt_img_output)
 
-    assert len(listdir(target_ss_input)) == len(listdir(target_ss_output)), \
+    assert len(listdir(target_ss_input)) == len(listdir(target_ss_output)) == len(listdir(src)), \
     "Preparation for self-supervision dataset failed. Check again."
 
 if __name__ == "__main__":
