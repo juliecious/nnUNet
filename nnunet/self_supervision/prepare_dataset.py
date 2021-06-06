@@ -15,13 +15,11 @@
 import shutil
 import numpy as np
 import torch
+import torchio as tio
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.configuration import default_num_threads
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 import SimpleITK as sitk
-
-from PIL import Image
-from torchvision import transforms
 
 
 def get_sitk_data(filename):
@@ -94,7 +92,7 @@ def BYOLAugmentations(filename):
         return t.expand(3, -1, -1)
 
     img_itk,img_npy, spacing, origin, direction = get_sitk_data(filename)
-
+    pil_img = Image.fromarray(img_npy.astype('uint8'), 'RGB')
     tensor_np = torch.from_numpy(img_npy)
 
     tf = transforms.Compose([
