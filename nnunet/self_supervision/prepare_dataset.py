@@ -52,24 +52,19 @@ def generate_context_restoration(target_base):
         corrupt_img = corrupt_image(join(src, file))
         corrupt_img_file = 'corrupted_' + str(file)
         corrupt_img_output = join(target_ss_input, corrupt_img_file)
-        sitk.WriteImage(corrupt_img, corrupt_img_output)
+        # sitk.WriteImage(corrupt_img, corrupt_img_output)
+        corrupt_img.save(corrupt_img_output)
 
     assert len(listdir(target_ss_input)) == len(listdir(target_ss_output)) == len(listdir(src)), \
         "Self-supervision dataset generation for Context Restoration failed. Check again."
 
 
 def corrupt_image(filename):
-    img_itk,img_npy, spacing, origin, direction = get_sitk_data(filename)
+    image = tio.ScalarImage(filename)
+    swap = tio.RandomSwap()
+    swapped = swap(image)
 
-    indices = np.random.random(img_npy.shape) < 0.2
-    _img_npy = img_npy.copy()
-    _img_npy[indices] = 0  # set to black
-    img_itk_new = sitk.GetImageFromArray(_img_npy)
-    img_itk_new.SetSpacing(spacing)
-    img_itk_new.SetOrigin(origin)
-    img_itk_new.SetDirection(direction)
-
-    return img_itk_new
+    return swapped
 
 
 def generate_jigsaw_puzzle():
