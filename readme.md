@@ -149,10 +149,11 @@ the [Medical Segmentation Decthlon](http://medicaldecathlon.com/). Please read
 ### Self-supervised learning
 Currently supported self-supervision tasks:
 - Context Restoration
-- Jigsaw Puzzle (TODO)
-- Contrast Learning (TODO)
+- Constrastive Predictive Coding (CPC) 
+- Jigsaw Puzzle
 -
 
+#### Conext Restoration
 nnUnet uses the dataset under `nnUNet_raw_data_base/nnUNet_raw_data`, divides it into two datasets, one with labels and 
 one without.
 
@@ -165,6 +166,22 @@ also see [here](documentation/dataset_conversion.md)), you can run this step wit
 ```bash
 nnUNet_self_supervision -t XXX -ss_tasks context_resotration jigsaw_puzzle
 ```
+
+#### Contrastive Learning - BYOL
+The main idea of contrastive learning is to learn the representations such that similar samples stay close to each other, 
+while dissimilar ones are far apart. The goal of Build your own latent (BYOL) is similar to contrastive learning, but with
+a big difference - it does not require negative sampling. BYOL minimizes the distance between representations of each sample 
+and a transformation of that sample. Examples of transformations include: translation, rotation, blurring, color inversion, 
+color jitter, gaussian noise, etc.
+
+
+#### Jigsaw Puzzle
+Inspired by the Jigsaw puzzle, in this task the puzzles are formed by samping an <i>n x n x n </i> grid of 3D patches. 
+Then these patches are shuffled according to an arbitrary permutation, selected from a set of predefined permutations,
+which follow the Hamming distance based algorithm. The model is trained to simply recognized the applied permutation, 
+allowing us to solve the 3D puzzles in an efficient manner. In order to prevent the model from solving this task quickly
+by finding shortcut solutions, we use random gaps (jitter) between neighboring 3D patches.
+
 
 ### Experiment planning and preprocessing
 As a first step, nnU-Net extracts a dataset fingerprint (a set of dataset-specific properties such as 

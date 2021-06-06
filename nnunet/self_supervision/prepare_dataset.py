@@ -14,13 +14,17 @@
 
 import shutil
 import numpy as np
+import torch
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.configuration import default_num_threads
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 import SimpleITK as sitk
 
+from PIL import Image
+from torchvision import transforms
 
-def corrupt_image(filename):
+
+def get_sitk_data(filename):
     img_itk = sitk.ReadImage(filename)
     img_npy = sitk.GetArrayFromImage(img_itk)
 
@@ -31,22 +35,9 @@ def corrupt_image(filename):
     origin = img_itk.GetOrigin()
     direction = np.array(img_itk.GetDirection())
 
-    indices = np.random.random(img_npy.shape) < 0.2
-    _img_npy = img_npy.copy()
-    _img_npy[indices] = 0  # set to black
-    img_itk_new = sitk.GetImageFromArray(_img_npy)
-    img_itk_new.SetSpacing(spacing)
-    img_itk_new.SetOrigin(origin)
-    img_itk_new.SetDirection(direction)
+    return img_itk,img_npy, spacing, origin, direction
 
-    return img_itk_new
-
-
-def generate_context_restoration(task_id):
-    base = join(os.environ['nnUNet_raw_data_base'], 'nnUNet_raw_data')
-
-    task_name = convert_id_to_task_name(task_id)
-    target_base = join(base, task_name)
+def generate_context_restoration(target_base):
 
     src = join(target_base, "imagesTr")
     target_ss_input = join(target_base, "ssInputContextRestoration")  # ssInput - corrupted
@@ -66,11 +57,62 @@ def generate_context_restoration(task_id):
         sitk.WriteImage(corrupt_img, corrupt_img_output)
 
     assert len(listdir(target_ss_input)) == len(listdir(target_ss_output)) == len(listdir(src)), \
-        "Preparation for self-supervision dataset failed. Check again."
+        "Self-supervision dataset generation for Context Restoration failed. Check again."
+
+
+def corrupt_image(filename):
+    img_itk,img_npy, spacing, origin, direction = get_sitk_data(filename)
+
+    indices = np.random.random(img_npy.shape) < 0.2
+    _img_npy = img_npy.copy()
+    _img_npy[indices] = 0  # set to black
+    img_itk_new = sitk.GetImageFromArray(_img_npy)
+    img_itk_new.SetSpacing(spacing)
+    img_itk_new.SetOrigin(origin)
+    img_itk_new.SetDirection(direction)
+
+    return img_itk_new
 
 
 def generate_jigsaw_puzzle():
     pass
+
+
+def generate_byol(image):
+    """
+    BYOL minimizes the distance between representations of each sample and a transformation of that sample.
+    Examples of transformations include: translation, rotation, blurring, color inversion, color jitter, gaussian noise.
+
+    Return an augmented dataset that consisted the above mentioned transformation. Will be used in the training.
+    """
+
+
+
+def BYOLAugmentations(filename):
+
+    def expand_greyscale(t):
+        return t.expand(3, -1, -1)
+
+    img_itk,img_npy, spacing, origin, direction = get_sitk_data(filename)
+
+    tensor_np = torch.from_numpy(img_npy)
+
+    tf = transforms.Compose([
+        transforms.Resize(tensor_np.shape[1]),
+        transforms.ColorJitter(brightness=0.8, contrast=0.8, saturation=0.8, hue=0.2),
+        transforms.RandomRotation((90, 180)),
+        transforms.CenterCrop(tensor_np.shape[1]),
+        transforms.ToTensor(),
+        transforms.Lambda(expand_greyscale)
+    ])
+
+    _img_np = tf(tensor_np).numpy()
+    img_itk_new = sitk.GetImageFromArray(_img_np)
+    img_itk_new.SetSpacing(spacing)
+    img_itk_new.SetOrigin(origin)
+    img_itk_new.SetDirection(direction)
+
+    return img_itk_new
 
 
 def main():
@@ -83,19 +125,25 @@ def main():
                                              "data folder")
     parser.add_argument("-ss_tasks", nargs="+", help="Self-supervision Tasks. Specify which self-supervision task you wish to "
                                              "run. Current supported tasks: context restoration (context_resotration)|"
-                                             " jigsaw puzzle (jigsaw_puzzle)")
+                                             " jigsaw puzzle (jigsaw_puzzle) | Build Your Own Latent (byol)")
     parser.add_argument("-p", required=False, default=default_num_threads, type=int,
                         help="Use this to specify how many processes are used to run the script. "
                              "Default is %d" % default_num_threads)
     args = parser.parse_args()
 
     ss_tasks = args.ss_tasks
+    base = join(os.environ['nnUNet_raw_data_base'], 'nnUNet_raw_data')
+    task_name = convert_id_to_task_name(args.t)
+    target_base = join(base, task_name)
+
     if "context_resotration" in ss_tasks:
-        generate_context_restoration(args.t)
+        generate_context_restoration(target_base)
 
     if "jigsaw_puzzle" in ss_tasks:
         generate_jigsaw_puzzle()
 
+    if "byol" in ss_tasks:
+        generate_byol()
 
 if __name__ == "__main__":
     main()
