@@ -36,10 +36,66 @@ def get_sitk_data(filename):
     return img_itk,img_npy, spacing, origin, direction
 
 def generate_context_restoration(target_base):
+    generate_augmented_datasets("ContextRestoration", target_base, add_noise_to_image)
 
+
+def add_noise_to_image(filename):
+    image = tio.ScalarImage(filename)
+    noise = tio.RandomNoise()
+    noised = noise(image)
+    return noised
+
+
+def generate_jigsaw_puzzle(target_base):
+    generate_augmented_datasets("JigsawPuzzle", target_base, swap_image)
+
+
+def swap_image(filename):
+    image = tio.ScalarImage(filename)
+    swap = tio.RandomSwap()
+    swapped = swap(image)
+    return swapped
+
+
+def generate_byol(target_base):
+    """
+    BYOL minimizes the distance between representations of each sample and a transformation of that sample.
+    Examples of transformations include: translation, rotation, blurring, color inversion, color jitter, gaussian noise.
+
+    Return an augmented dataset that consisted the above mentioned transformation. Will be used in the training.
+    """
+    generate_augmented_datasets("BYOL", target_base, byol_aug)
+
+
+def byol_aug(filename):
+    image = tio.ScalarImage(filename)
+    get_foreground = tio.ZNormalization.mean
+    training_transform = tio.Compose([
+        tio.CropOrPad((180, 220, 170)),  # zero mean, unit variance of foreground
+        tio.ZNormalization(
+            masking_method=get_foreground),
+        tio.RandomBlur(p=0.25),          # blur 25% of times
+        tio.RandomNoise(p=0.25),         # Gaussian noise 25% of times
+        tio.OneOf({  # either
+            tio.RandomAffine(): 0.8,     # random affine
+            tio.RandomElasticDeformation(): 0.2,  # or random elastic deformation
+        }, p=0.8),                       # applied to 80% of images
+        tio.RandomBiasField(p=0.3),      # magnetic field inhomogeneity 30% of times
+        tio.OneOf({  # either
+            tio.RandomMotion(): 1,       # random motion artifact
+            tio.RandomSpike(): 2,        # or spikes
+            tio.RandomGhosting(): 2,     # or ghosts
+        }, p=0.5),                       # applied to 50% of images
+    ])
+
+    tfs_image = training_transform(image)
+    return tfs_image
+
+
+def generate_augmented_datasets(task_name, target_base, aug_fn):
     src = join(target_base, "imagesTr")
-    target_ss_input = join(target_base, "ssInputContextRestoration")  # ssInput - corrupted
-    target_ss_output = join(target_base, "ssOutputContextRestoration")  # ssOutput - original
+    target_ss_input = join(target_base, "ssInput" + task_name)  # ssInput - augmented
+    target_ss_output = join(target_base, "ssOutput" + task_name)  # ssOutput - original images copied from ImagesTr
 
     maybe_mkdir_p(target_ss_input)
     maybe_mkdir_p(target_ss_output)
@@ -49,63 +105,13 @@ def generate_context_restoration(target_base):
     shutil.copytree(src, target_ss_output)
 
     for file in sorted(listdir(src)):
-        corrupt_img = corrupt_image(join(src, file))
-        corrupt_img_file = 'corrupted_' + str(file)
+        corrupt_img = aug_fn(join(src, file))
+        corrupt_img_file = "_" + str(file)
         corrupt_img_output = join(target_ss_input, corrupt_img_file)
-        # sitk.WriteImage(corrupt_img, corrupt_img_output)
         corrupt_img.save(corrupt_img_output)
 
     assert len(listdir(target_ss_input)) == len(listdir(target_ss_output)) == len(listdir(src)), \
-        "Self-supervision dataset generation for Context Restoration failed. Check again."
-
-
-def corrupt_image(filename):
-    image = tio.ScalarImage(filename)
-    swap = tio.RandomSwap()
-    swapped = swap(image)
-
-    return swapped
-
-
-def generate_jigsaw_puzzle():
-    pass
-
-
-def generate_byol(image):
-    """
-    BYOL minimizes the distance between representations of each sample and a transformation of that sample.
-    Examples of transformations include: translation, rotation, blurring, color inversion, color jitter, gaussian noise.
-
-    Return an augmented dataset that consisted the above mentioned transformation. Will be used in the training.
-    """
-
-
-
-def BYOLAugmentations(filename):
-
-    def expand_greyscale(t):
-        return t.expand(3, -1, -1)
-
-    img_itk,img_npy, spacing, origin, direction = get_sitk_data(filename)
-    pil_img = Image.fromarray(img_npy.astype('uint8'), 'RGB')
-    tensor_np = torch.from_numpy(img_npy)
-
-    tf = transforms.Compose([
-        transforms.Resize(tensor_np.shape[1]),
-        transforms.ColorJitter(brightness=0.8, contrast=0.8, saturation=0.8, hue=0.2),
-        transforms.RandomRotation((90, 180)),
-        transforms.CenterCrop(tensor_np.shape[1]),
-        transforms.ToTensor(),
-        transforms.Lambda(expand_greyscale)
-    ])
-
-    _img_np = tf(tensor_np).numpy()
-    img_itk_new = sitk.GetImageFromArray(_img_np)
-    img_itk_new.SetSpacing(spacing)
-    img_itk_new.SetOrigin(origin)
-    img_itk_new.SetDirection(direction)
-
-    return img_itk_new
+        f"Self-supervision dataset generation for {task_name} failed. Check again."
 
 
 def main():
@@ -133,10 +139,10 @@ def main():
         generate_context_restoration(target_base)
 
     if "jigsaw_puzzle" in ss_tasks:
-        generate_jigsaw_puzzle()
+        generate_jigsaw_puzzle(target_base)
 
     if "byol" in ss_tasks:
-        generate_byol()
+        generate_byol(target_base)
 
 if __name__ == "__main__":
     main()
