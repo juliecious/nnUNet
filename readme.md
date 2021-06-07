@@ -147,25 +147,29 @@ the [Medical Segmentation Decthlon](http://medicaldecathlon.com/). Please read
 [this](documentation/dataset_conversion.md) for information on how to convert datasets to be compatible with nnU-Net.
 
 ### Self-supervised learning
-Currently supported self-supervision tasks:
-- Context Restoration
-- Constrastive Predictive Coding (CPC) 
-- Jigsaw Puzzle
--
-
-#### Conext Restoration
 nnUnet uses the dataset under `nnUNet_raw_data_base/nnUNet_raw_data`, divides it into two datasets, one with labels and 
-one without.
-
-For context restoration tasks, noises are added to the corrupt the images in `imagesTr` and then saved in 
-`ssInputContextRestoration`. In `ssOutputContextRestoration` images are copied directly from `imagesTr`. 
+one without. Currently supported self-supervision tasks:
+- Context Restoration
+- Jigsaw Puzzle
+- Build Your Own Latent
+- AutoEncoder (TODO)
 
 Provided that the requested raw dataset is located in the correct folder (`nnUNet_raw_data_base/nnUNet_raw_data/TaskXXX_MYTASK`, 
 also see [here](documentation/dataset_conversion.md)), you can run this step with the following command:
 
 ```bash
-nnUNet_self_supervision -t XXX -ss_tasks context_resotration jigsaw_puzzle
+nnUNet_self_supervision -t TaskID -s [context_resotration | byol | jigsaw_puzzle]
 ```
+
+Then check if the dataset has passed the sanity check by running:
+
+```bash
+nnUNet_plan_and_preprocess -t TaskID -no_pp --verify_dataset_integrity
+```
+
+#### Conext Restoration
+For context restoration tasks, noises are added to the corrupt the images in `imagesTr` and then saved in 
+`ssInputContextRestoration`. In `ssOutputContextRestoration` images are copied directly from `imagesTr`.
 
 #### Contrastive Learning - BYOL
 The main idea of contrastive learning is to learn the representations such that similar samples stay close to each other, 
@@ -173,7 +177,6 @@ while dissimilar ones are far apart. The goal of Build your own latent (BYOL) is
 a big difference - it does not require negative sampling. BYOL minimizes the distance between representations of each sample 
 and a transformation of that sample. Examples of transformations include: translation, rotation, blurring, color inversion, 
 color jitter, gaussian noise, etc.
-
 
 #### Jigsaw Puzzle
 Inspired by the Jigsaw puzzle, in this task the puzzles are formed by samping an <i>n x n x n </i> grid of 3D patches. 
