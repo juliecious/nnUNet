@@ -1,17 +1,9 @@
-#    Copyright 2021 Division of Medical and Environmental Computing, Technical University of Darmstadt, Darmstadt, Germany
-#
-#    Licensed under the Apache License, Version 2.0 (the "License");
-#    you may not use this file except in compliance with the License.
-#    You may obtain a copy of the License at
-#
-#        http://www.apache.org/licenses/LICENSE-2.0
-#
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS,
-#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#    See the License for the specific language governing permissions and
-#    limitations under the License.
+#####################################################################################
+# ----------Copyright 2021 Division of Medical and Environmental Computing,----------#
+# ----------Technical University of Darmstadt, Darmstadt, Germany--------------------#
+#####################################################################################
 
+import json
 import shutil
 import numpy as np
 import torchio as tio
@@ -62,16 +54,16 @@ def swap_image(filename):
 
 
 def generate_byol(target_base):
-    """
-    BYOL minimizes the distance between representations of each sample and a transformation of that sample.
-    Examples of transformations include: translation, rotation, blurring, color inversion, color jitter, gaussian noise.
-
-    Return an augmented dataset that consisted the above mentioned transformation. Will be used in the training.
-    """
     generate_augmented_datasets("BYOL", target_base, byol_aug)
 
 
 def byol_aug(filename):
+    """
+        BYOL minimizes the distance between representations of each sample and a transformation of that sample.
+        Examples of transformations include: translation, rotation, blurring, color inversion, color jitter, gaussian noise.
+
+        Return an augmented dataset that consisted the above mentioned transformation. Will be used in the training.
+        """
     image = tio.ScalarImage(filename)
     get_foreground = tio.ZNormalization.mean
     training_transform = tio.Compose([
@@ -109,10 +101,12 @@ def generate_augmented_datasets(task_name, target_base, aug_fn):
         shutil.rmtree(target_ss_output)
     shutil.copytree(src, target_ss_output)
 
+    file_names = []
     # copy augmented images to ssInput folder
     for file in sorted(listdir(src)):
         corrupt_img = aug_fn(join(src, file))
         corrupt_img_file = "_" + str(file)
+        file_names.append(str(file))
         corrupt_img_output = join(target_ss_input, corrupt_img_file)
         corrupt_img.save(corrupt_img_output)
 
@@ -120,19 +114,21 @@ def generate_augmented_datasets(task_name, target_base, aug_fn):
     assert len(listdir(target_ss_input)) == len(listdir(target_ss_output)) == len(listdir(src)), \
         f"Self-supervision dataset generation for {task_name} failed. Check again."
 
+    return file_names
+
 
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="We extend nnUNet to offer self-supervision tasks. This step is to"
                                                  " split the dataset into two - self-supervision input and self- "
-                                                 "supervisio output folder.", required=True)
+                                                 "supervisio output folder.")
     parser.add_argument("-t", type=int, help="Task id. The task name you wish to run self-supervision task for. "
                                              "It must have a matching folder 'TaskXXX_' in the raw "
                                              "data folder", required=True)
-    parser.add_argument("-ss_tasks", nargs="+", required=True,
+    parser.add_argument("-ss_tasks", nargs="+",
                         help="Self-supervision Tasks. Specify which self-supervision task you wish to "
                              "run. Current supported tasks: context_restoration| jigsaw_puzzle | byol")
-    parser.add_argument("-p", default=default_num_threads, type=int,
+    parser.add_argument("-p", default=default_num_threads, type=int, required=False,
                         help="Use this to specify how many processes are used to run the script. "
                              "Default is %d" % default_num_threads)
     args = parser.parse_args()
@@ -142,15 +138,37 @@ def main():
     task_name = convert_id_to_task_name(args.t)
     target_base = join(base, task_name)
 
+    with open(join(target_base, 'dataset.json')) as json_file:
+        updated_json_file = json.load(json_file).copy()
+
     if "context_restoration" in ss_tasks:
-        generate_context_restoration(target_base)
+        file_names = generate_augmented_datasets("ContextRestoration", target_base, swap_image)
+        updated_json_file['contextRestoration'] = [{'image': "./ssInputContextRestoration/%s.nii.gz" % i.split("/")[-1], \
+                                                    "label": "./ssOutputContextRestoration/%s.nii.gz" % i.split("/")[
+                                                        -1]} for i in file_names]
+        print('Finished preparing dataset for context restoration')
 
     if "jigsaw_puzzle" in ss_tasks:
-        generate_jigsaw_puzzle(target_base)
+        file_names = generate_augmented_datasets("JigsawPuzzle", target_base, swap_image)
+        updated_json_file['jigsawPuzzle'] = [{'image': "./ssInputJigsawPuzzle/%s.nii.gz" % i.split("/")[-1], \
+                                                    "label": "./ssOutputJigsawPuzzle/%s.nii.gz" % i.split("/")[
+                                                        -1]} for i in file_names]
+        print('Finished preparing dataset for jigsaw puzzle')
 
     if "byol" in ss_tasks:
-        generate_byol(target_base)
+        file_names = generate_augmented_datasets("BYOL", target_base, byol_aug)
+        updated_json_file['byol'] = [{'image': "./ssInputBYOL/%s.nii.gz" % i.split("/")[-1], \
+                                              "label": "./ssOutputBYOL/%s.nii.gz" % i.split("/")[
+                                                  -1]} for i in file_names]
+        print('Finished preparing dataset for byol')
 
+    # remove the original dataset.json
+    os.remove(join(target_base, 'dataset.json'))
+    # remove the modified dataset.json
+    save_json(updated_json_file, join(target_base, "dataset.json"))
+    print('Updated dataset.json')
+
+    print('Preparation for self supervision task succeeded!')
 
 if __name__ == "__main__":
     main()
