@@ -1,16 +1,17 @@
-#####################################################################################
+######################################################################################
 # ----------Copyright 2021 Division of Medical and Environmental Computing,----------#
 # ----------Technical University of Darmstadt, Darmstadt, Germany--------------------#
-#####################################################################################
+######################################################################################
 
-import json
 import shutil
+
+import SimpleITK as sitk
 import numpy as np
 import torchio as tio
 from batchgenerators.utilities.file_and_folder_operations import *
+
 from nnunet.configuration import default_num_threads
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
-import SimpleITK as sitk
 
 
 def get_sitk_data(filename):
@@ -28,10 +29,6 @@ def get_sitk_data(filename):
     return img_itk, img_npy, spacing, origin, direction
 
 
-def generate_context_restoration(target_base):
-    generate_augmented_datasets("ContextRestoration", target_base, swap_image)
-
-
 def add_noise_to_image(filename):
     """ Image manipulation method - add noise """
     image = tio.ScalarImage(filename)
@@ -40,21 +37,12 @@ def add_noise_to_image(filename):
     return noised
 
 
-def generate_jigsaw_puzzle(target_base):
-    # generate_augmented_datasets("JigsawPuzzle", target_base, swap_image)
-    pass
-
-
 def swap_image(filename):
     """ Image manipulation method - swap patches of image for context restoration """
     image = tio.ScalarImage(filename)
     swap = tio.RandomSwap()
     swapped = swap(image)
     return swapped
-
-
-def generate_byol(target_base):
-    generate_augmented_datasets("BYOL", target_base, byol_aug)
 
 
 def byol_aug(filename):
@@ -121,7 +109,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="We extend nnUNet to offer self-supervision tasks. This step is to"
                                                  " split the dataset into two - self-supervision input and self- "
-                                                 "supervisio output folder.")
+                                                 "supervision output folder.")
     parser.add_argument("-t", type=int, help="Task id. The task name you wish to run self-supervision task for. "
                                              "It must have a matching folder 'TaskXXX_' in the raw "
                                              "data folder", required=True)
@@ -138,6 +126,7 @@ def main():
     task_name = convert_id_to_task_name(args.t)
     target_base = join(base, task_name)
 
+    import json
     with open(join(target_base, 'dataset.json')) as json_file:
         updated_json_file = json.load(json_file).copy()
 
@@ -146,21 +135,21 @@ def main():
         updated_json_file['contextRestoration'] = [{'image': "./ssInputContextRestoration/%s.nii.gz" % i.split("/")[-1], \
                                                     "label": "./ssOutputContextRestoration/%s.nii.gz" % i.split("/")[
                                                         -1]} for i in file_names]
-        print('Finished preparing dataset for context restoration')
+        print('Prepared dataset for context restoration.')
 
     if "jigsaw_puzzle" in ss_tasks:
         file_names = generate_augmented_datasets("JigsawPuzzle", target_base, swap_image)
         updated_json_file['jigsawPuzzle'] = [{'image': "./ssInputJigsawPuzzle/%s.nii.gz" % i.split("/")[-1], \
-                                                    "label": "./ssOutputJigsawPuzzle/%s.nii.gz" % i.split("/")[
-                                                        -1]} for i in file_names]
-        print('Finished preparing dataset for jigsaw puzzle')
+                                              "label": "./ssOutputJigsawPuzzle/%s.nii.gz" % i.split("/")[
+                                                  -1]} for i in file_names]
+        print('Prepared dataset for jigsaw puzzle.')
 
     if "byol" in ss_tasks:
         file_names = generate_augmented_datasets("BYOL", target_base, byol_aug)
         updated_json_file['byol'] = [{'image': "./ssInputBYOL/%s.nii.gz" % i.split("/")[-1], \
-                                              "label": "./ssOutputBYOL/%s.nii.gz" % i.split("/")[
-                                                  -1]} for i in file_names]
-        print('Finished preparing dataset for byol')
+                                      "label": "./ssOutputBYOL/%s.nii.gz" % i.split("/")[
+                                          -1]} for i in file_names]
+        print('Prepared dataset for byol.')
 
     # remove the original dataset.json
     os.remove(join(target_base, 'dataset.json'))
@@ -168,7 +157,8 @@ def main():
     save_json(updated_json_file, join(target_base, "dataset.json"))
     print('Updated dataset.json')
 
-    print('Preparation for self supervision task succeeded!')
+    print('Preparation for self supervision task succeeded! Move on to the plan_and_preprocessing stage.')
+
 
 if __name__ == "__main__":
     main()
