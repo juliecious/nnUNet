@@ -168,8 +168,9 @@ nnUNet_plan_and_preprocess -t TaskID -no_pp --verify_dataset_integrity
 ```
 
 #### Conext Restoration
-For context restoration tasks, noises are added to the corrupt the images in `imagesTr` and then saved in 
-`ssInputContextRestoration`. In `ssOutputContextRestoration` images are copied directly from `imagesTr`.
+Like the name already suggests, restoring the image context can learn image context [[2]](#referecnces). Specifically, 
+the function learns to restore the corrupted images by solving two subtasks: 1) recognising which parts of the image 
+contain corrupted context; 2) reconstructing the correct image context in these areas. Then the pretrained model is applicable for different types of subsequent task.
 
 #### Contrastive Learning - BYOL
 The main idea of contrastive learning is to learn the representations such that similar samples stay close to each other, 

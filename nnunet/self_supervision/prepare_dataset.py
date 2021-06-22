@@ -14,7 +14,6 @@
 
 import shutil
 import numpy as np
-import torch
 import torchio as tio
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.configuration import default_num_threads
@@ -33,10 +32,11 @@ def get_sitk_data(filename):
     origin = img_itk.GetOrigin()
     direction = np.array(img_itk.GetDirection())
 
-    return img_itk,img_npy, spacing, origin, direction
+    return img_itk, img_npy, spacing, origin, direction
+
 
 def generate_context_restoration(target_base):
-    generate_augmented_datasets("ContextRestoration", target_base, add_noise_to_image)
+    generate_augmented_datasets("ContextRestoration", target_base, swap_image)
 
 
 def add_noise_to_image(filename):
@@ -47,7 +47,8 @@ def add_noise_to_image(filename):
 
 
 def generate_jigsaw_puzzle(target_base):
-    generate_augmented_datasets("JigsawPuzzle", target_base, swap_image)
+    # generate_augmented_datasets("JigsawPuzzle", target_base, swap_image)
+    pass
 
 
 def swap_image(filename):
@@ -74,18 +75,18 @@ def byol_aug(filename):
         tio.CropOrPad((180, 220, 170)),  # zero mean, unit variance of foreground
         tio.ZNormalization(
             masking_method=get_foreground),
-        tio.RandomBlur(p=0.25),          # blur 25% of times
-        tio.RandomNoise(p=0.25),         # Gaussian noise 25% of times
+        tio.RandomBlur(p=0.25),  # blur 25% of times
+        tio.RandomNoise(p=0.25),  # Gaussian noise 25% of times
         tio.OneOf({  # either
-            tio.RandomAffine(): 0.8,     # random affine
+            tio.RandomAffine(): 0.8,  # random affine
             tio.RandomElasticDeformation(): 0.2,  # or random elastic deformation
-        }, p=0.8),                       # applied to 80% of images
-        tio.RandomBiasField(p=0.3),      # magnetic field inhomogeneity 30% of times
+        }, p=0.8),  # applied to 80% of images
+        tio.RandomBiasField(p=0.3),  # magnetic field inhomogeneity 30% of times
         tio.OneOf({  # either
-            tio.RandomMotion(): 1,       # random motion artifact
-            tio.RandomSpike(): 2,        # or spikes
-            tio.RandomGhosting(): 2,     # or ghosts
-        }, p=0.5),                       # applied to 50% of images
+            tio.RandomMotion(): 1,  # random motion artifact
+            tio.RandomSpike(): 2,  # or spikes
+            tio.RandomGhosting(): 2,  # or ghosts
+        }, p=0.5),  # applied to 50% of images
     ])
 
     tfs_image = training_transform(image)
@@ -94,7 +95,7 @@ def byol_aug(filename):
 
 def generate_augmented_datasets(task_name, target_base, aug_fn):
     src = join(target_base, "imagesTr")
-    target_ss_input = join(target_base, "ssInput" + task_name)  # ssInput - augmented
+    target_ss_input = join(target_base, "ssInput" + task_name)  # ssInput - pretext tasks
     target_ss_output = join(target_base, "ssOutput" + task_name)  # ssOutput - original images copied from ImagesTr
 
     maybe_mkdir_p(target_ss_input)
@@ -122,9 +123,10 @@ def main():
     parser.add_argument("-t", type=int, help="Task id. The task name you wish to run self-supervision task for. "
                                              "It must have a matching folder 'TaskXXX_' in the raw "
                                              "data folder")
-    parser.add_argument("-ss_tasks", nargs="+", help="Self-supervision Tasks. Specify which self-supervision task you wish to "
-                                             "run. Current supported tasks: context restoration (context_resotration)|"
-                                             " jigsaw puzzle (jigsaw_puzzle) | Build Your Own Latent (byol)")
+    parser.add_argument("-ss_tasks", nargs="+",
+                        help="Self-supervision Tasks. Specify which self-supervision task you wish to "
+                             "run. Current supported tasks: context restoration (context_resotration)|"
+                             " jigsaw puzzle (jigsaw_puzzle) | Build Your Own Latent (byol)")
     parser.add_argument("-p", required=False, default=default_num_threads, type=int,
                         help="Use this to specify how many processes are used to run the script. "
                              "Default is %d" % default_num_threads)
@@ -143,6 +145,7 @@ def main():
 
     if "byol" in ss_tasks:
         generate_byol(target_base)
+
 
 if __name__ == "__main__":
     main()
