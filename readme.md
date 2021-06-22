@@ -158,7 +158,7 @@ Provided that the requested raw dataset is located in the correct folder (`nnUNe
 also see [here](documentation/dataset_conversion.md)), you can run this step with the following command:
 
 ```bash
-nnUNet_self_supervision -t TaskID -s [context_resotration | byol | jigsaw_puzzle]
+nnUNet_self_supervision -t TaskID -s [context_restoration | byol | jigsaw_puzzle]
 ```
 
 Then check if the dataset has passed the sanity check by running:

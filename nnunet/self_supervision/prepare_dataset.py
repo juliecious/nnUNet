@@ -22,6 +22,7 @@ import SimpleITK as sitk
 
 
 def get_sitk_data(filename):
+    """ Return meta information of the given NIfTI image """
     img_itk = sitk.ReadImage(filename)
     img_npy = sitk.GetArrayFromImage(img_itk)
 
@@ -40,6 +41,7 @@ def generate_context_restoration(target_base):
 
 
 def add_noise_to_image(filename):
+    """ Image manipulation method - add noise """
     image = tio.ScalarImage(filename)
     noise = tio.RandomNoise()
     noised = noise(image)
@@ -52,6 +54,7 @@ def generate_jigsaw_puzzle(target_base):
 
 
 def swap_image(filename):
+    """ Image manipulation method - swap patches of image for context restoration """
     image = tio.ScalarImage(filename)
     swap = tio.RandomSwap()
     swapped = swap(image)
@@ -101,16 +104,19 @@ def generate_augmented_datasets(task_name, target_base, aug_fn):
     maybe_mkdir_p(target_ss_input)
     maybe_mkdir_p(target_ss_output)
 
+    # copy all files in ImagesTr to ssOutput folder
     if isdir(target_ss_output):
         shutil.rmtree(target_ss_output)
     shutil.copytree(src, target_ss_output)
 
+    # copy augmented images to ssInput folder
     for file in sorted(listdir(src)):
         corrupt_img = aug_fn(join(src, file))
         corrupt_img_file = "_" + str(file)
         corrupt_img_output = join(target_ss_input, corrupt_img_file)
         corrupt_img.save(corrupt_img_output)
 
+    # sanity check
     assert len(listdir(target_ss_input)) == len(listdir(target_ss_output)) == len(listdir(src)), \
         f"Self-supervision dataset generation for {task_name} failed. Check again."
 
@@ -119,15 +125,14 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="We extend nnUNet to offer self-supervision tasks. This step is to"
                                                  " split the dataset into two - self-supervision input and self- "
-                                                 "supervisio output folder.")
+                                                 "supervisio output folder.", required=True)
     parser.add_argument("-t", type=int, help="Task id. The task name you wish to run self-supervision task for. "
                                              "It must have a matching folder 'TaskXXX_' in the raw "
-                                             "data folder")
-    parser.add_argument("-ss_tasks", nargs="+",
+                                             "data folder", required=True)
+    parser.add_argument("-ss_tasks", nargs="+", required=True,
                         help="Self-supervision Tasks. Specify which self-supervision task you wish to "
-                             "run. Current supported tasks: context restoration (context_resotration)|"
-                             " jigsaw puzzle (jigsaw_puzzle) | Build Your Own Latent (byol)")
-    parser.add_argument("-p", required=False, default=default_num_threads, type=int,
+                             "run. Current supported tasks: context_restoration| jigsaw_puzzle | byol")
+    parser.add_argument("-p", default=default_num_threads, type=int,
                         help="Use this to specify how many processes are used to run the script. "
                              "Default is %d" % default_num_threads)
     args = parser.parse_args()
@@ -137,7 +142,7 @@ def main():
     task_name = convert_id_to_task_name(args.t)
     target_base = join(base, task_name)
 
-    if "context_resotration" in ss_tasks:
+    if "context_restoration" in ss_tasks:
         generate_context_restoration(target_base)
 
     if "jigsaw_puzzle" in ss_tasks:
