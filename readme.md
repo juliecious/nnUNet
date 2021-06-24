@@ -158,14 +158,11 @@ Provided that the requested raw dataset is located in the correct folder (`nnUNe
 also see [here](documentation/dataset_conversion.md)), you can run this step with the following command:
 
 ```bash
-nnUNet_prepare_self_supervision_dataset -t TaskID -s [context_restoration | byol | jigsaw_puzzle]
+nnUNet_prepare_self_supervision_dataset -t TaskID -s [context_restoration | byol | jigsaw_puzzle] 
 ```
 
-Then check if the dataset has passed the sanity check by running:
+Add additional flag `--verify_dataset_integrity` to see if self-supervision dataset has passed the sanity check.
 
-```bash
-nnUNet_plan_and_preprocess -t TaskID -no_pp --verify_dataset_integrity
-```
 
 #### Conext Restoration
 Like the name already suggests, restoring the image context can learn image context [[2]](#referecnces). Specifically, 
