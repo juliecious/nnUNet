@@ -245,7 +245,6 @@ def convert_pretext_task(pretext_task):
         'jigsaw_puzzle': 'JigsawPuzzle',
         'byol': 'BYOL',
     }
-
     return pretext_tasks[pretext_task]
 
 
@@ -309,8 +308,6 @@ def main():
     # remove the modified dataset.json
     save_json(updated_json_file, join(target_base, "dataset.json"))
     print('Updated dataset.json')
-
-    # run sanity check for input/output images
 
     print('Preparation for self supervision succeeded! Move on to the plan_and_preprocessing stage.')
 
