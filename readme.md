@@ -163,6 +163,13 @@ nnUNet_prepare_self_supervision_dataset -t TaskID -s [context_restoration | byol
 
 Add additional flag `--verify_dataset_integrity` to see if self-supervision dataset has passed the sanity check.
 
+| Flag        | Description           | Option  | Type |
+| ------------- |:-------------:| -----:|-----:|
+| `-t`      | Task ID | -- | `int`
+| `-s`      | SSL Tasks. Accepts multiple tasks.      |  `context_restoration`, `byol`, `jigsaw_puzzle`  | `str`
+| `-p` | Number of threads    |  --  | `int`
+| `--verify_dataset_integrity` | Check if dataset is UNet compatible      |  `True`, `False` | `bool`
+
 
 #### Conext Restoration
 Like the name already suggests, restoring the image context can learn image context [[2]](#referecnces). Specifically, 
