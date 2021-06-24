@@ -11,6 +11,7 @@ import torchio as tio
 from batchgenerators.utilities.file_and_folder_operations import *
 
 from nnunet.configuration import default_num_threads
+from nnunet.preprocessing.sanity_checks import verify_same_geometry, verify_all_same_orientation
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 
 
@@ -102,7 +103,150 @@ def generate_augmented_datasets(task_name, target_base, aug_fn):
     assert len(listdir(target_ss_input)) == len(listdir(target_ss_output)) == len(listdir(src)), \
         f"Self-supervision dataset generation for {task_name} failed. Check again."
 
+    print(f"Generated dataset for {task_name}.")
     return file_names
+
+
+def verify_dataset_integrity(folder, ss_task):
+    """
+    folder needs the ssInputTASK and ssOutputTASK sub-folder. There also needs to be a dataset.json
+    checks if all input and output images are present
+    for each case, checks whether all modalities are present
+    for each case, checks whether the pixel grids are aligned
+    :param folder:
+    :return:
+    """
+    assert isfile(join(folder, "dataset.json")), "There needs to be a dataset.json file in folder, folder=%s" % folder
+    dataset = load_json(join(folder, "dataset.json"))
+
+    # check if the pretext task has "ssInputTASK" and "ssOutputTASK"
+    pretext_task = convert_pretext_task(ss_task)
+    input_folder = f"ssInput{pretext_task}"
+    output_folder = f"ssOutput{pretext_task}"
+
+    assert isdir(join(folder, input_folder)), \
+        f"There needs to be a {input_folder} subfolder in folder, folder={folder}"
+    assert isdir(join(folder, output_folder)), \
+        f"There needs to be a {output_folder} subfolder in folder, folder={folder}"
+
+    training_cases = dataset[pretext_task.lower()]
+    num_modalities = len(dataset['modality'].keys())
+    expected_train_identifiers = [i['input'].split("/")[-1][:-12] for i in training_cases]
+    expected_test_identifiers = [i['output'].split("/")[-1][:-12] for i in training_cases]
+
+    ## check training set
+    nii_files_in_pretext_input = subfiles((join(folder, input_folder)), suffix=".nii.gz", join=False)
+    nii_files_in_pretext_output = subfiles((join(folder, output_folder)), suffix=".nii.gz", join=False)
+    nii_files_in_labelsTr = subfiles((join(folder, "labelsTr")), suffix=".nii.gz", join=False)
+
+    label_files = []
+    geometries_OK = True
+    has_nan = False
+
+    # check all cases
+    if len(expected_train_identifiers) != len(np.unique(expected_train_identifiers)):
+        raise RuntimeError("found duplicate input cases in dataset.json")
+    if len(expected_train_identifiers) != len(expected_test_identifiers):
+        raise RuntimeError("input and output cases in dataset.json doesn't match")
+
+    print("Verifying SS output set") # same images in ImageTr
+    for c in expected_test_identifiers:
+        print("checking case", c)
+        # check if all files are present
+        expected_label_file = join(folder, "labelsTr", c + ".nii.gz")
+        label_files.append(expected_label_file)
+
+        expected_output_files = [join(folder, output_folder, c + "_%04.0d.nii.gz" % i) for i in range(num_modalities)]
+
+        assert all([isfile(i) for i in
+                    expected_output_files]), "some image files are missing for case %s. Expected files:\n %s" % (
+            c, expected_output_files)
+
+        # verify that all modalities and the label have the same shape and geometry.
+        label_itk = sitk.ReadImage(expected_label_file)
+
+        inputs_itk = [sitk.ReadImage(i) for i in expected_output_files]
+        for i, img in enumerate(inputs_itk):
+            nans_in_image = np.any(np.isnan(sitk.GetArrayFromImage(img)))
+            has_nan = has_nan | nans_in_image
+            same_geometry = verify_same_geometry(img, label_itk)
+            if not same_geometry:
+                geometries_OK = False
+                print(
+                    "The geometry of the image %s does not match the geometry of the label file. The pixel arrays "
+                    "will not be aligned and nnU-Net cannot use this data. Please make sure your image modalities "
+                    "are coregistered and have the same geometry as the label" % expected_output_files[0][:-12])
+            if nans_in_image:
+                print("There are NAN values in image %s" % expected_output_files[i])
+
+        # now remove checked files from the lists nii_files_in_imagesTr and nii_files_in_labelsTr
+        for i in expected_output_files:
+            nii_files_in_pretext_output.remove(os.path.basename(i))
+        nii_files_in_labelsTr.remove(os.path.basename(expected_label_file))
+
+    # check for stragglers
+    assert len(nii_files_in_pretext_output) == 0, f"there are training cases in {output_folder} that are not listed in " \
+                                                 f"dataset.json: %s" % nii_files_in_pretext_output
+    assert len(nii_files_in_labelsTr) == 0, "there are training cases in labelsTr that are not listed in " \
+                                            "dataset.json: %s" % nii_files_in_labelsTr
+
+    # check SS input set
+    if len(expected_train_identifiers) > 0:
+        print("Verifying input set")
+
+        for c in expected_train_identifiers:
+            print("checking case", c)
+            # check if all files are present
+            expected_input_files = [join(folder, input_folder, c + "_%04.0d.nii.gz" % i) for i in
+                                     range(num_modalities)]
+            assert all([isfile(i) for i in
+                        expected_input_files]), "some image files are missing for case %s. Expected files:\n %s" % (
+                c, expected_input_files)
+
+            # verify that all modalities and the label have the same geometry. We use the affine for this
+            if num_modalities > 1:
+                images_itk = [sitk.ReadImage(i) for i in expected_input_files]
+                reference_img = images_itk[0]
+
+                for i, img in enumerate(images_itk[1:]):
+                    assert verify_same_geometry(img, reference_img), \
+                        "The modalities of the image %s do not seem to be registered. "\
+                        "Please coregister your modalities." % (expected_input_files[i])
+
+            # now remove checked files from the lists nii_files_in_pretext_output
+            for i in expected_input_files:
+                nii_files_in_pretext_input.remove(os.path.basename(i))
+        assert len(nii_files_in_pretext_input) == 0, f"there are training cases in {input_folder} that are not " \
+                                                      "listed in dataset.json: %s" % nii_files_in_pretext_input
+
+    all_same, unique_orientations = verify_all_same_orientation(join(folder, output_folder))
+    if not all_same:
+        print(
+            "WARNING: Not all images in the dataset have the same axis ordering. We very strongly recommend you "
+            "correct that by reorienting the data. fslreorient2std should do the trick")
+
+    # save unique orientations to dataset.json
+    if not geometries_OK:
+        raise Warning(
+            "GEOMETRY MISMATCH FOUND! CHECK THE TEXT OUTPUT! This does not cause an error at this point but you "
+            "should definitely check whether your geometries are alright!")
+    else:
+        print("Self Supervision Dataset OK")
+
+    if has_nan:
+        raise RuntimeError(
+            "Some images have nan values in them. This will break the training. See text output above to see which ones")
+
+
+def convert_pretext_task(pretext_task):
+    """ key: arg command; value: file name """
+    pretext_tasks = {
+        'context_restoration': 'ContextRestoration',
+        'jigsaw_puzzle': 'JigsawPuzzle',
+        'byol': 'BYOL',
+    }
+
+    return pretext_tasks[pretext_task]
 
 
 def main():
@@ -119,6 +263,9 @@ def main():
     parser.add_argument("-p", default=default_num_threads, type=int, required=False,
                         help="Use this to specify how many processes are used to run the script. "
                              "Default is %d" % default_num_threads)
+    parser.add_argument("--verify_dataset_integrity", required=False, default=False, action="store_true",
+                        help="set this flag to check the dataset integrity. This is useful and should be done once for "
+                             "each dataset!")
     args = parser.parse_args()
 
     ss_tasks = args.ss_tasks
@@ -131,25 +278,31 @@ def main():
         updated_json_file = json.load(json_file).copy()
 
     if "context_restoration" in ss_tasks:
-        file_names = generate_augmented_datasets("ContextRestoration", target_base, swap_image)
-        updated_json_file['contextRestoration'] = [{'image': "./ssInputContextRestoration/%s.nii.gz" % i.split("/")[-1], \
-                                                    "label": "./ssOutputContextRestoration/%s.nii.gz" % i.split("/")[
-                                                        -1]} for i in file_names]
-        print('Prepared dataset for context restoration.')
+        pretext_task = convert_pretext_task("context_restoration")
+        file_names = generate_augmented_datasets(pretext_task, target_base, swap_image)
+        updated_json_file['contextRestoration'] = [{'input': f"./ssInput{pretext_task}/_%s" % i.split("/")[-1],
+                                                    "output": f"./ssOutput{pretext_task}/%s" % i.split("/")[-1]} \
+                                                   for i in file_names]
+        if args.verify_dataset_integrity:
+            verify_dataset_integrity(target_base, "context_restoration")
 
     if "jigsaw_puzzle" in ss_tasks:
-        file_names = generate_augmented_datasets("JigsawPuzzle", target_base, swap_image)
-        updated_json_file['jigsawPuzzle'] = [{'image': "./ssInputJigsawPuzzle/%s.nii.gz" % i.split("/")[-1], \
-                                              "label": "./ssOutputJigsawPuzzle/%s.nii.gz" % i.split("/")[
-                                                  -1]} for i in file_names]
-        print('Prepared dataset for jigsaw puzzle.')
+        pretext_task = convert_pretext_task("jigsaw_puzzle")
+        file_names = generate_augmented_datasets(pretext_task, target_base, swap_image)
+        updated_json_file['jigsawPuzzle'] = [{'input': f"./ssInput{pretext_task}/_%s" % i.split("/")[-1],
+                                              "output": f"./ssOutput{pretext_task}/%s" % i.split("/")[-1]} \
+                                             for i in file_names]
+        if args.verify_dataset_integrity:
+            verify_dataset_integrity(target_base, "jigsaw_puzzle")
 
     if "byol" in ss_tasks:
-        file_names = generate_augmented_datasets("BYOL", target_base, byol_aug)
-        updated_json_file['byol'] = [{'image': "./ssInputBYOL/%s.nii.gz" % i.split("/")[-1], \
-                                      "label": "./ssOutputBYOL/%s.nii.gz" % i.split("/")[
-                                          -1]} for i in file_names]
-        print('Prepared dataset for byol.')
+        pretext_task = convert_pretext_task("byol")
+        file_names = generate_augmented_datasets(pretext_task, target_base, byol_aug)
+        updated_json_file['byol'] = [{'input': f"./ssInput{pretext_task}/_%s" % i.split("/")[-1],
+                                      "output": f"./ssOutput{pretext_task}/%s" % i.split("/")[-1]} \
+                                     for i in file_names]
+        if args.verify_dataset_integrity:
+            verify_dataset_integrity(target_base, "byol")
 
     # remove the original dataset.json
     os.remove(join(target_base, 'dataset.json'))
@@ -157,7 +310,9 @@ def main():
     save_json(updated_json_file, join(target_base, "dataset.json"))
     print('Updated dataset.json')
 
-    print('Preparation for self supervision task succeeded! Move on to the plan_and_preprocessing stage.')
+    # run sanity check for input/output images
+
+    print('Preparation for self supervision succeeded! Move on to the plan_and_preprocessing stage.')
 
 
 if __name__ == "__main__":
